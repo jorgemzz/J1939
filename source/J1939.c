@@ -1097,7 +1097,12 @@ void J1939_TP_DT_Packet_send(void)
             TP_TX_MSG.packet_offset_p = 0;
             TP_TX_MSG.time = J1939_TP_T3;
             /* 跳转步骤，等待结束确认或则重新发送数据请求*/
-            TP_TX_MSG.state = J1939_TP_WAIT_ACK;
+            if(TP_TX_MSG.tp_tx_msg.SA == J1939_GLOBAL_ADDRESS){ //TP.CM  with destination address 255 is BAM
+				TP_TX_MSG.state = J1939_TP_TX_WAIT;
+				J1939_TP_Flags_t.state = J1939_TP_NULL;
+			}else{
+				TP_TX_MSG.state = J1939_TP_WAIT_ACK;
+			}
         }
         else
         {
@@ -1147,8 +1152,15 @@ void J1939_CM_Start(void)
     J1939_EnqueueMessage(&_msg, Can_Node);
 
 	/*刷新等待时间，触发下一个步骤（）*/
-    TP_TX_MSG.time = J1939_TP_T3;
-    TP_TX_MSG.state = J1939_TP_TX_CM_WAIT;
+    if(TP_TX_MSG.tp_tx_msg.SA == J1939_GLOBAL_ADDRESS){ //TP.CM  with destination address 255 is BAM
+    	_msg.Mxe.Data[0] = J1939_BAM_CONTROL_BYTE;
+    	TP_TX_MSG.packets_request_num = TP_TX_MSG.packets_total;
+		TP_TX_MSG.packet_offset_p = 0;
+		TP_TX_MSG.state = J1939_TP_TX_DT;
+    }else{
+    	TP_TX_MSG.time = J1939_TP_T3;
+    	TP_TX_MSG.state = J1939_TP_TX_CM_WAIT;
+    }
 
 }
 /**
@@ -1473,7 +1485,12 @@ j1939_int8_t J1939_TP_TX_Message(j1939_uint32_t PGN,j1939_uint8_t DA,j1939_uint8
 	{
 		TP_TX_MSG.packets_total ++;
 	}
-	TP_TX_MSG.time = J1939_TP_T3;
+	if(DA == J1939_GLOBAL_ADDRESS){	//TP.CM  with destination address 255 is BAM
+		TP_TX_MSG.time = J1939_TP_Tr;
+	}else{
+		TP_TX_MSG.time = J1939_TP_T3;
+	}
+
 	//触发开始CM_START
 	TP_TX_MSG.state = J1939_TP_TX_CM_START;
 
