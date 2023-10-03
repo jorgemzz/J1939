@@ -640,7 +640,7 @@ void J1939_ReceiveMessages( void )
                 						+(j1939_uint32_t)((OneMessage.Mxe.Data[5])&0xFF);
                 if((J1939_TP_Flags_t.state == J1939_TP_NULL) && (TP_RX_MSG.state == J1939_TP_RX_WAIT))
 				{
-                    if(OneMessage.Mxe.Data[0] == 16)
+                    if(OneMessage.Mxe.Data[0] == 16 || OneMessage.Mxe.Data[0] == 32)
                     {
                     	J1939_TP_Flags_t.state = J1939_TP_RX;
                     	J1939_TP_Flags_t.TP_RX_CAN_NODE = Can_Node;
@@ -665,8 +665,13 @@ void J1939_ReceiveMessages( void )
                     	TP_RX_MSG.tp_rx_msg.byte_count = ((j1939_uint32_t)((OneMessage.Mxe.Data[2]<<8)&0xFF00)
                     									 +(j1939_uint32_t)((OneMessage.Mxe.Data[1])&0xFF));
                     	TP_RX_MSG.packets_total = OneMessage.Mxe.Data[3];
-                    	TP_RX_MSG.time = J1939_TP_T2;
-                    	TP_RX_MSG.state = J1939_TP_RX_READ_DATA;
+                    	if(OneMessage.Mxe.Data[0] == J1939_BAM_CONTROL_BYTE){	//BAM
+                    		TP_RX_MSG.time = J1939_TP_T1;
+                    		TP_RX_MSG.state = J1939_TP_RX_DATA_WAIT;
+                    	}else{
+                    		TP_RX_MSG.time = J1939_TP_T2;
+                    		TP_RX_MSG.state = J1939_TP_RX_READ_DATA;
+                    	}
                     	break;
                     }
                     goto PutInReceiveQueue;
@@ -674,6 +679,11 @@ void J1939_ReceiveMessages( void )
 				}
                 if(J1939_TP_Flags_t.state == J1939_TP_TX)
 				{
+                	//Multi-Packet Broadcast message is not regulated by any flow-control
+                	if(TP_TX_MSG.tp_tx_msg.SA == J1939_GLOBAL_ADDRESS){
+                		break;
+                	}
+
 					/*校验PGN*/
 					if (_pgn == TP_TX_MSG.tp_tx_msg.PGN)
 					{
@@ -745,6 +755,12 @@ void J1939_ReceiveMessages( void )
                 		TP_RX_MSG.packets_ok_num++;
 					}
 					TP_RX_MSG.time = J1939_TP_T1;
+					if(OneMessage.Mxe.PDUSpecific == J1939_GLOBAL_ADDRESS){	//BAM
+						if(TP_RX_MSG.packets_ok_num == TP_RX_MSG.packets_total){
+							TP_RX_MSG.state = J1939_RX_DONE;
+						}
+						break;
+					}
 					/*判断是否收到偶数个数据包或者读取到最后一个数据包*/
 					if((TP_RX_MSG.packets_ok_num%2 == 0) ||(TP_RX_MSG.packets_ok_num == TP_RX_MSG.packets_total))
 					{
